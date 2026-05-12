@@ -3,320 +3,248 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Draw a TON | NFT Battle</title>
+    <title>Draw a TON | Neon Pro</title>
     
+    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.dot.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Montserrat:wght@400;700&display=swap');
 
         :root {
-            --bg: #08090b;
-            --card: #121418;
-            --accent: #0098ea;
-            --ton-blue: #0098ea;
-            --danger: #ff3b30;
-            --success: #34c759;
-            --text: #ffffff;
-            --glass: rgba(255, 255, 255, 0.03);
-            --border: rgba(255, 255, 255, 0.08);
+            --bg: #050505;
+            --neon-blue: #0098ea;
+            --neon-gold: #ffcc00;
+            --neon-text: #fff;
+            --card: rgba(18, 20, 24, 0.8);
+            --border: rgba(0, 152, 234, 0.3);
         }
 
-        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
-        body, html { 
-            margin: 0; padding: 0; width: 100%; height: 100%; 
-            background: var(--bg); color: var(--text);
+        body { 
+            margin: 0; background: var(--bg); color: #fff; 
             font-family: 'Montserrat', sans-serif; overflow: hidden;
+            height: 100vh;
         }
 
-        /* --- UI UTILS --- */
-        .screen { position: absolute; inset: 0; display: none; flex-direction: column; background: var(--bg); }
-        .screen.active { display: flex; animation: fIn 0.3s ease; }
-        @keyframes fIn { from { opacity: 0; } to { opacity: 1; } }
+        /* --- NEON TEXT --- */
+        .neon-title {
+            font-family: 'Orbitron', sans-serif;
+            text-transform: uppercase;
+            letter-spacing: 3px;
+            color: var(--neon-text);
+            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+        }
 
-        .ton-symbol { color: var(--ton-blue); font-weight: 900; margin-right: 4px; }
-        .glass-card { background: var(--card); border: 1px solid var(--border); border-radius: 24px; padding: 20px; }
-        .btn { border: none; border-radius: 18px; padding: 16px; font-weight: 900; transition: 0.2s; cursor: pointer; width: 100%; font-size: 14px; }
-        .btn-blue { background: var(--ton-blue); color: #fff; box-shadow: 0 8px 20px rgba(0, 152, 234, 0.2); }
-        .btn-blue:active { transform: scale(0.97); }
+        .neon-btn {
+            background: transparent;
+            border: 2px solid var(--neon-blue);
+            color: var(--neon-blue);
+            box-shadow: 0 0 15px var(--neon-blue);
+            text-shadow: 0 0 5px var(--neon-blue);
+            font-family: 'Orbitron', sans-serif;
+            padding: 15px; border-radius: 12px; font-weight: 900;
+            width: 100%; transition: 0.3s; margin-top: 10px;
+        }
+
+        .neon-btn:active { background: var(--neon-blue); color: #000; }
+
+        /* --- LAYOUT --- */
+        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 20px; padding-bottom: 100px; }
+        .screen.active { display: flex; }
+        .glass-card { 
+            background: var(--card); backdrop-filter: blur(15px);
+            border: 1px solid var(--border); border-radius: 20px;
+            padding: 20px; margin-bottom: 15px;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        }
 
         /* --- NAVIGATION --- */
-        .nav { position: fixed; bottom: 0; width: 100%; height: 80px; background: rgba(10,12,15,0.95); backdrop-filter: blur(20px); border-top: 1px solid var(--border); display: flex; justify-content: space-around; z-index: 1000; padding-bottom: env(safe-area-inset-bottom); }
-        .nav-item { background: none; border: none; color: #555; display: flex; flex-direction: column; align-items: center; gap: 5px; font-size: 10px; font-weight: 700; width: 25%; }
-        .nav-item.active { color: var(--ton-blue); }
-        .nav-item svg { width: 24px; height: 24px; fill: currentColor; }
+        .nav {
+            position: fixed; bottom: 0; width: 100%; height: 80px;
+            background: rgba(0,0,0,0.9); display: flex; 
+            justify-content: space-around; align-items: center;
+            border-top: 1px solid var(--border); z-index: 1000;
+        }
+        .nav-item { color: #555; background: none; border: none; font-family: 'Orbitron'; font-size: 10px; }
+        .nav-item.active { color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); }
 
-        /* --- SCREENS CONTENT --- */
-        .scroll { flex-grow: 1; overflow-y: auto; padding: 20px 20px 100px; }
-        .header { padding: calc(env(safe-area-inset-top) + 20px) 20px 10px; display: flex; justify-content: space-between; align-items: center; }
-        .profile-sm { display: flex; align-items: center; gap: 12px; }
-        .avatar { width: 48px; height: 48px; border-radius: 14px; border: 2px solid var(--ton-blue); }
+        /* --- DRAW ENGINE --- */
+        #paint-overlay { 
+            position: fixed; inset: 0; background: #fff; z-index: 2000; 
+            display: none; flex-direction: column; 
+        }
+        canvas { touch-action: none; flex-grow: 1; background: #fff; }
 
-        /* --- ADMIN PANEL --- */
-        .admin-box { background: #1a1010; border: 1px solid #ff3b3033; padding: 20px; border-radius: 24px; margin-top: 20px; }
-        .admin-input { width: 100%; background: #000; border: 1px solid #333; padding: 14px; border-radius: 12px; color: #fff; margin-bottom: 10px; font-family: inherit; }
-        .user-list-item { display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 12px; margin-bottom: 8px; font-size: 13px; }
-
-        /* --- DRAWING --- */
-        #draw-view { position: fixed; inset: 0; background: #fff; z-index: 2000; display: none; flex-direction: column; }
-        .draw-h { background: #000; color: #fff; padding: 40px 20px 15px; display: flex; justify-content: space-between; align-items: center; }
-        #canvas { flex-grow: 1; touch-action: none; background: white; }
-        .palette { display: flex; gap: 10px; padding: 15px; background: #000; overflow-x: auto; }
-        .color { min-width: 35px; height: 35px; border-radius: 50%; border: 2px solid rgba(255,255,255,0.2); }
+        /* --- ADMIN SPECIFIC --- */
+        .admin-scroll { overflow-y: auto; flex-grow: 1; }
+        .user-row { 
+            display: flex; justify-content: space-between; 
+            padding: 10px; border-bottom: 1px solid var(--border); 
+            font-size: 12px;
+        }
     </style>
 </head>
 <body>
 
+    <div id="scr-lobby" class="screen active">
+        <div style="text-align: center; margin-top: 40px;">
+            <h1 class="neon-title" style="font-size: 32px;">Draw a <span style="color:var(--neon-gold); text-shadow: 0 0 10px var(--neon-gold);">TON</span></h1>
+            <p style="font-size: 12px; opacity: 0.7;">ENTER THE CYBER ARENA</p>
+        </div>
+
+        <div class="glass-card" style="margin-top: 30px; text-align: center;">
+            <div id="wallet-status" style="color: var(--neon-gold); margin-bottom: 10px; font-weight: bold;">КОШЕЛЕК НЕ ПОДКЛЮЧЕН</div>
+            <button class="neon-btn" onclick="Wallet.connect()" id="btn-connect">ПОДКЛЮЧИТЬ КОШЕЛЕК</button>
+        </div>
+
+        <div class="glass-card">
+            <div style="display: flex; justify-content: space-between;">
+                <span>ВАШ БАЛАНС:</span>
+                <b style="color: var(--neon-blue);" id="val-bal">0.00 TON</b>
+            </div>
+            <button class="neon-btn" style="border-color: var(--neon-gold); color: var(--neon-gold); box-shadow: 0 0 10px var(--neon-gold);" onclick="Game.join()">УЧАСТВОВАТЬ (0.1 TON)</button>
+        </div>
+    </div>
+
+    <div id="scr-admin" class="screen">
+        <h2 class="neon-title">Админ-Панель</h2>
+        <div class="admin-scroll">
+            <div class="glass-card">
+                <input type="text" id="adm-task" placeholder="Предмет для рисования" style="width:100%; padding:10px; background:#000; border:1px solid var(--neon-blue); color:#fff; border-radius:8px;">
+                <button class="neon-btn" onclick="Admin.startRound()">ЗАПУСТИТЬ БИТВУ</button>
+            </div>
+            <div id="users-list" class="glass-card">
+                </div>
+        </div>
+    </div>
+
+    <div id="paint-overlay">
+        <div style="background:#000; color:#fff; padding: 40px 20px 20px; display:flex; justify-content:space-between;">
+            <b id="timer" style="color:var(--neon-blue)">06:00</b>
+            <b id="task">РИСУЙ ТОН</b>
+            <button onclick="Game.submit()" style="background:var(--neon-blue); border:none; color:#000; font-weight:900; padding:5px 15px; border-radius:8px;">ОТПРАВИТЬ</button>
+        </div>
+        <canvas id="c"></canvas>
+    </div>
+
     <nav class="nav">
-        <button class="nav-item active" onclick="UI.go('lobby', this)">
-            <svg viewBox="0 0 24 24"><path d="M12 3L4 9v12h16V9l-8-6z"/></svg>БИТВА
-        </button>
-        <button class="nav-item" onclick="UI.go('stats', this)">
-            <svg viewBox="0 0 24 24"><path d="M16 6l4 4-4 4M8 6L4 10l4 4"/></svg>ТОПЫ
-        </button>
-        <button class="nav-item" onclick="UI.go('admin', this)" id="nav-admin" style="display:none;">
-            <svg viewBox="0 0 24 24"><path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"/></svg>АДМИН
-        </button>
-        <button class="nav-item" onclick="UI.go('profile', this)">
-            <svg viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></svg>ПРОФИЛЬ
-        </button>
+        <button class="nav-item active" onclick="UI.nav('lobby', this)">БИТВА</button>
+        <button class="nav-item" onclick="UI.nav('admin', this)" id="nav-adm" style="display:none;">АДМИН</button>
     </nav>
 
-    <div id="screen-lobby" class="screen active">
-        <div class="header">
-            <div class="profile-sm">
-                <img id="my-ava" src="" class="avatar">
-                <div>
-                    <div id="my-name" style="font-weight: 900;">User</div>
-                    <div style="font-size: 11px; color: var(--ton-blue);">ARTIST LVL 1</div>
-                </div>
-            </div>
-            <div class="glass-card" style="padding: 8px 15px; border-radius: 14px;">
-                <span class="ton-symbol">💎</span><b id="my-bal">0.00</b>
-            </div>
-        </div>
-        <div class="scroll">
-            <div class="glass-card" style="text-align: center; border-color: var(--ton-blue);">
-                <h1 style="margin: 0; color: #ffcc00;">Draw a <span style="color:var(--ton-blue)">TON</span></h1>
-                <p style="opacity: 0.6; font-size: 13px;">Рисуй предметы, побеждай, забирай банк!</p>
-                <div style="margin: 20px 0; padding: 15px; background: rgba(0,152,234,0.1); border-radius: 15px;">
-                    <span style="font-size: 11px; display: block; opacity: 0.5;">ТЕКУЩИЙ БАНК</span>
-                    <b style="font-size: 24px;"><span class="ton-symbol">💎</span><span id="game-bank">0.00</span></b>
-                </div>
-                <button class="btn btn-blue" onclick="Game.join()">УЧАСТВОВАТЬ (0.1 TON)</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-profile" class="screen">
-        <div class="header"><h1>Профиль</h1></div>
-        <div class="scroll">
-            <div class="glass-card">
-                <h3>Пополнить Баланс</h3>
-                <input type="number" id="dep-amount" class="admin-input" placeholder="Сумма TON">
-                <button class="btn btn-blue" onclick="Game.deposit()">КУПИТЬ TON</button>
-            </div>
-        </div>
-    </div>
-
-    <div id="screen-admin" class="screen">
-        <div class="header"><h1>Управление</h1></div>
-        <div class="scroll">
-            <div class="admin-box">
-                <h4>Запуск Раунда</h4>
-                <input type="text" id="adm-task" class="admin-input" placeholder="Название предмета">
-                <button class="btn btn-blue" style="background:var(--danger)" onclick="Admin.start()">СТАРТ (6 МИНУТ)</button>
-            </div>
-
-            <div class="admin-box" style="background:#10161a; border-color:var(--ton-blue)">
-                <h4>Выдать TON игроку</h4>
-                <input type="text" id="adm-uid" class="admin-input" placeholder="ID игрока">
-                <input type="number" id="adm-amount" class="admin-input" placeholder="Сумма TON">
-                <button class="btn btn-blue" onclick="Admin.giveTon()">НАЧИСЛИТЬ</button>
-            </div>
-
-            <div class="admin-box" style="background:#000;">
-                <h4>Список игроков</h4>
-                <div id="adm-user-list"></div>
-            </div>
-        </div>
-    </div>
-
-    <div id="draw-view">
-        <div class="draw-h">
-            <b id="timer" style="color:var(--ton-blue); font-size: 20px;">06:00</b>
-            <b id="task-name">ПРЕДМЕТ</b>
-            <button onclick="Game.finish()" style="background:var(--ton-blue); border:none; color:#fff; padding:10px 20px; border-radius:12px; font-weight:900;">ГОТОВО</button>
-        </div>
-        <canvas id="canvas"></canvas>
-        <div class="palette" id="colors"></div>
-    </div>
-
     <script>
-        // --- CONFIG ---
+        // --- DATA ---
         const firebaseConfig = {
             apiKey: "AIzaSyBawoHndJxGvNGbGxq5RnuCIA2doGKSQOM",
             authDomain: "paint-tg.firebaseapp.com",
             databaseURL: "https://paint-tg-default-rtdb.firebaseio.com",
             projectId: "paint-tg",
-            storageBucket: "paint-tg.firebasestorage.app",
-            messagingSenderId: "1072051223023",
-            appId: "1:1072051223023:web:946b3082fe853666581e1a"
+            databaseURL: "https://paint-tg-default-rtdb.firebaseio.com"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const tg = window.Telegram.WebApp;
-        const user = tg.initDataUnsafe.user || { id: 777, first_name: "Admin_Test", username: "Kegovich" };
+        const user = tg.initDataUnsafe.user || { id: 1, first_name: "Boss", username: "Kegovich" };
 
-        const colors = ['#000000', '#FF3B30', '#4CD964', '#007AFF', '#FFCC00', '#AF52DE', '#FFFFFF'];
-
-        // --- CORE GAME ---
-        const Game = {
-            me: null,
-            init() {
-                this.sync();
-                this.listenGame();
-                Engine.setup();
-                if(user.username === 'Kegovich') {
-                    document.getElementById('nav-admin').style.display = 'flex';
-                    Admin.listenUsers();
-                }
-            },
-            sync() {
-                db.ref('users/' + user.id).on('value', s => {
-                    this.me = s.val() || { name: user.first_name, balance: 0.0, avatar: user.photo_url || 'https://api.dicebear.com/7.x/avataaars/svg?seed='+user.id };
-                    if(!s.exists()) db.ref('users/' + user.id).set(this.me);
-                    
-                    document.getElementById('my-name').innerText = this.me.name;
-                    document.getElementById('my-bal').innerText = (this.me.balance || 0).toFixed(2);
-                    document.getElementById('my-ava').src = this.me.avatar;
-                });
-            },
-            listenGame() {
-                db.ref('game_state').on('value', s => {
-                    const state = s.val();
-                    if(state && state.status === 'drawing') UI.draw(true, state.subject, state.endTime);
-                    else UI.draw(false);
-                });
-            },
-            deposit() {
-                const val = parseFloat(document.getElementById('dep-amount').value);
-                if(!val || val <= 0) return alert("Введите сумму!");
-                // Имитация пополнения
-                db.ref('users/' + user.id + '/balance').transaction(b => (b || 0) + val);
-                alert("Успешно пополнено на " + val + " TON");
-            },
-            join() {
-                if(this.me.balance < 0.1) return alert("Недостаточно TON!");
-                db.ref('users/' + user.id + '/balance').transaction(b => b - 0.1);
-                db.ref('game_bank').transaction(b => (b || 0) + 0.1);
-                alert("Вы в игре! Ожидайте старта.");
-            },
-            finish() {
-                const data = document.getElementById('canvas').toDataURL();
-                db.ref('drawings/' + user.id).set({ img: data, name: user.first_name });
-                UI.draw(false);
+        // --- WALLET (TONCONNECT) ---
+        const connector = new TonConnectSDK.TonConnect();
+        
+        const Wallet = {
+            async connect() {
+                const walletConnectionSource = {
+                    universalLink: 'https://tonkeeper.com/ton-connect',
+                    bridgeUrl: 'https://bridge.tonapi.io/bridge'
+                };
+                const url = connector.connect(walletConnectionSource);
+                tg.openLink(url);
             }
         };
 
-        // --- ADMIN LOGIC ---
+        connector.onStatusChange(w => {
+            if (w) {
+                document.getElementById('wallet-status').innerText = "ПОДКЛЮЧЕНО: " + w.account.address.slice(0,6) + "...";
+                db.ref('users/' + user.id + '/address').set(w.account.address);
+            }
+        });
+
+        // --- GAME LOGIC ---
+        const Game = {
+            init() {
+                if(user.username === 'Kegovich') {
+                    document.getElementById('nav-adm').style.display = 'block';
+                    Admin.listen();
+                }
+                this.sync();
+                this.listenState();
+            },
+            sync() {
+                db.ref('users/' + user.id).on('value', s => {
+                    const data = s.val() || { name: user.first_name, balance: 0.0 };
+                    document.getElementById('val-bal').innerText = (data.balance || 0).toFixed(2) + " TON";
+                });
+            },
+            listenState() {
+                db.ref('game_state').on('value', s => {
+                    const st = s.val();
+                    if(st && st.status === 'drawing') {
+                        document.getElementById('paint-overlay').style.display = 'flex';
+                        Engine.init();
+                    } else {
+                        document.getElementById('paint-overlay').style.display = 'none';
+                    }
+                });
+            },
+            join() {
+                // В реальности тут вызывается транзакция через connector.sendTransaction
+                alert("Транзакция отправлена в кошелек...");
+            }
+        };
+
         const Admin = {
-            start() {
-                const task = document.getElementById('adm-task').value;
-                if(!task) return alert("Что рисуем?");
-                db.ref('game_state').set({ status: 'drawing', subject: task.toUpperCase(), endTime: Date.now() + 360000 });
+            startRound() {
+                const t = document.getElementById('adm-task').value;
+                db.ref('game_state').set({ status: 'drawing', subject: t, endTime: Date.now() + 360000 });
             },
-            giveTon() {
-                const uid = document.getElementById('adm-uid').value;
-                const amt = parseFloat(document.getElementById('adm-amount').value);
-                if(!uid || !amt) return alert("Заполни поля!");
-                db.ref('users/' + uid + '/balance').transaction(b => (b || 0) + amt);
-                alert("Выдано " + amt + " TON");
-            },
-            listenUsers() {
+            listen() {
                 db.ref('users').on('value', s => {
-                    const list = document.getElementById('adm-user-list');
-                    list.innerHTML = "";
+                    const list = document.getElementById('users-list');
+                    list.innerHTML = "<h4>ИГРОКИ:</h4>";
                     s.forEach(u => {
                         const d = u.val();
-                        list.innerHTML += `
-                            <div class="user-list-item">
-                                <span>${d.name} <small>(${u.key})</small></span>
-                                <b>💎 ${d.balance.toFixed(2)}</b>
-                            </div>
-                        `;
+                        list.innerHTML += `<div class="user-row"><span>${d.name}</span><b>${(d.balance||0).toFixed(2)} TON</b></div>`;
                     });
                 });
             }
         };
 
-        // --- DRAWING ENGINE ---
-        const Engine = {
-            canvas: null, ctx: null, drawing: false, color: '#000000',
-            setup() {
-                this.canvas = document.getElementById('canvas');
-                this.ctx = this.canvas.getContext('2d');
-                this.canvas.width = window.innerWidth;
-                this.canvas.height = window.innerHeight - 200;
-                this.ctx.lineWidth = 5;
-                this.ctx.lineCap = 'round';
-                
-                const p = document.getElementById('colors');
-                colors.forEach(c => {
-                    const d = document.createElement('div');
-                    d.className = 'color';
-                    d.style.background = c;
-                    d.onclick = () => this.color = c;
-                    p.appendChild(d);
-                });
-
-                const start = (e) => { this.drawing = true; this.ctx.beginPath(); this.draw(e); };
-                const move = (e) => { if(this.drawing) this.draw(e); };
-                const stop = () => { this.drawing = false; };
-
-                this.canvas.onmousedown = this.canvas.ontouchstart = start;
-                this.canvas.onmousemove = this.canvas.ontouchmove = move;
-                window.onmouseup = window.ontouchend = stop;
-            },
-            draw(e) {
-                const t = e.touches ? e.touches[0] : e;
-                const r = this.canvas.getBoundingClientRect();
-                this.ctx.lineTo(t.clientX - r.left, t.clientY - r.top);
-                this.ctx.strokeStyle = this.color;
-                this.ctx.stroke();
+        const UI = {
+            nav(id, el) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.getElementById('scr-' + id).classList.add('active');
+                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
+                el.classList.add('active');
             }
         };
 
-        // --- UI UI ---
-        const UI = {
-            go(id, el) {
-                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                document.getElementById('screen-' + id).classList.add('active');
-                el.classList.add('active');
-            },
-            draw(show, task, end) {
-                const v = document.getElementById('draw-view');
-                v.style.display = show ? 'flex' : 'none';
-                if(show) {
-                    document.getElementById('task-name').innerText = task;
-                    this.timer(end);
-                    Engine.ctx.fillStyle = "#fff";
-                    Engine.ctx.fillRect(0,0,Engine.canvas.width,Engine.canvas.height);
-                }
-            },
-            timer(end) {
-                const el = document.getElementById('timer');
-                const i = setInterval(() => {
-                    const diff = end - Date.now();
-                    if(diff <= 0) { clearInterval(i); el.innerText = "00:00"; }
-                    else {
-                        const m = Math.floor(diff/60000), s = Math.floor((diff%60000)/1000);
-                        el.innerText = `${m}:${s<10?'0':''}${s}`;
-                    }
-                }, 1000);
+        const Engine = {
+            init() {
+                const canvas = document.getElementById('c');
+                const ctx = canvas.getContext('2d');
+                canvas.width = window.innerWidth;
+                canvas.height = window.innerHeight - 150;
+                ctx.strokeStyle = "#000"; ctx.lineWidth = 5;
+                
+                let draw = false;
+                canvas.ontouchstart = (e) => { draw = true; ctx.beginPath(); };
+                canvas.ontouchmove = (e) => {
+                    if(!draw) return;
+                    const t = e.touches[0];
+                    ctx.lineTo(t.clientX, t.clientY - 100);
+                    ctx.stroke();
+                };
+                canvas.ontouchend = () => draw = false;
             }
         };
 
