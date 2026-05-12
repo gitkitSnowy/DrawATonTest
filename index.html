@@ -3,252 +3,598 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <title>Draw a TON | Neon Pro</title>
+    <title>Draw a TON | Pro Battle Arena</title>
     
-    <script src="https://unpkg.com/@tonconnect/sdk@latest/dist/tonconnect-sdk.dot.js"></script>
+    <script src="https://unpkg.com/@tonconnect/ui@latest/dist/tonconnect-ui.min.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
     <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
     <script src="https://telegram.org/js/telegram-web-app.js"></script>
     
     <style>
-        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Montserrat:wght@400;700&display=swap');
+        @import url('https://fonts.googleapis.com/css2?family=Orbitron:wght@400;700;900&family=Inter:wght@300;400;600;800&display=swap');
 
         :root {
             --bg: #050505;
-            --neon-blue: #0098ea;
-            --neon-gold: #ffcc00;
-            --neon-text: #fff;
-            --card: rgba(18, 20, 24, 0.8);
-            --border: rgba(0, 152, 234, 0.3);
+            --surface: #121418;
+            --accent: #0098ea;
+            --accent-glow: rgba(0, 152, 234, 0.5);
+            --gold: #ffcc00;
+            --gold-glow: rgba(255, 204, 0, 0.4);
+            --danger: #ff3b30;
+            --success: #34c759;
+            --text: #ffffff;
+            --text-dim: #8a8a8e;
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
         }
 
-        body { 
-            margin: 0; background: var(--bg); color: #fff; 
-            font-family: 'Montserrat', sans-serif; overflow: hidden;
-            height: 100vh;
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background: var(--bg); color: var(--text);
+            font-family: 'Inter', sans-serif; overflow: hidden;
         }
 
-        /* --- NEON TEXT --- */
-        .neon-title {
-            font-family: 'Orbitron', sans-serif;
-            text-transform: uppercase;
-            letter-spacing: 3px;
-            color: var(--neon-text);
-            text-shadow: 0 0 10px var(--neon-blue), 0 0 20px var(--neon-blue);
+        /* --- СКРЫТЫЕ ЭЛЕМЕНТЫ И СКРОЛЛ --- */
+        ::-webkit-scrollbar { width: 0px; background: transparent; }
+
+        /* --- UI FRAMEWORK --- */
+        .screen { 
+            position: absolute; inset: 0; display: none; 
+            flex-direction: column; background: var(--bg);
+            padding-bottom: calc(80px + var(--safe-bottom));
+        }
+        .screen.active { display: flex; animation: screenIn 0.4s cubic-bezier(0.2, 1, 0.3, 1); }
+
+        @keyframes screenIn { 
+            from { opacity: 0; transform: translateY(15px) scale(0.98); } 
+            to { opacity: 1; transform: translateY(0) scale(1); } 
         }
 
-        .neon-btn {
-            background: transparent;
-            border: 2px solid var(--neon-blue);
-            color: var(--neon-blue);
-            box-shadow: 0 0 15px var(--neon-blue);
-            text-shadow: 0 0 5px var(--neon-blue);
-            font-family: 'Orbitron', sans-serif;
-            padding: 15px; border-radius: 12px; font-weight: 900;
-            width: 100%; transition: 0.3s; margin-top: 10px;
+        /* --- НЕОНОВЫЙ СТИЛЬ --- */
+        .neon-text { font-family: 'Orbitron', sans-serif; text-shadow: 0 0 10px var(--accent-glow); }
+        .neon-border { border: 1px solid var(--border); box-shadow: 0 0 15px rgba(0,0,0,0.5), inset 0 0 10px var(--accent-glow); }
+        
+        .glass { 
+            background: rgba(255, 255, 255, 0.03); 
+            backdrop-filter: blur(20px); 
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 24px;
         }
 
-        .neon-btn:active { background: var(--neon-blue); color: #000; }
-
-        /* --- LAYOUT --- */
-        .screen { position: absolute; inset: 0; display: none; flex-direction: column; padding: 20px; padding-bottom: 100px; }
-        .screen.active { display: flex; }
-        .glass-card { 
-            background: var(--card); backdrop-filter: blur(15px);
-            border: 1px solid var(--border); border-radius: 20px;
-            padding: 20px; margin-bottom: 15px;
-            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+        /* --- HEADER --- */
+        .header {
+            padding: calc(var(--safe-top) + 20px) 20px 20px;
+            display: flex; align-items: center; justify-content: space-between;
+            z-index: 10;
+        }
+        .user-pill {
+            display: flex; align-items: center; gap: 12px;
+            background: var(--surface); padding: 8px 16px 8px 8px;
+            border-radius: 40px; border: 1px solid var(--border);
+        }
+        .user-pill img { width: 36px; height: 36px; border-radius: 50%; border: 2px solid var(--accent); }
+        
+        .balance-card {
+            background: linear-gradient(135deg, var(--accent), #005682);
+            padding: 10px 20px; border-radius: 20px; text-align: right;
+            box-shadow: 0 8px 20px var(--accent-glow);
         }
 
         /* --- NAVIGATION --- */
-        .nav {
-            position: fixed; bottom: 0; width: 100%; height: 80px;
-            background: rgba(0,0,0,0.9); display: flex; 
-            justify-content: space-around; align-items: center;
-            border-top: 1px solid var(--border); z-index: 1000;
+        .tab-bar {
+            position: fixed; bottom: 0; width: 100%; 
+            height: calc(80px + var(--safe-bottom));
+            background: rgba(8, 8, 10, 0.95); backdrop-filter: blur(25px);
+            border-top: 1px solid var(--border);
+            display: flex; justify-content: space-around; align-items: center;
+            padding-bottom: var(--safe-bottom); z-index: 1000;
         }
-        .nav-item { color: #555; background: none; border: none; font-family: 'Orbitron'; font-size: 10px; }
-        .nav-item.active { color: var(--neon-blue); text-shadow: 0 0 10px var(--neon-blue); }
+        .tab-item {
+            background: none; border: none; color: var(--text-dim);
+            display: flex; flex-direction: column; align-items: center; gap: 4px;
+            transition: 0.3s; width: 25%;
+        }
+        .tab-item.active { color: var(--accent); transform: translateY(-2px); }
+        .tab-item svg { width: 24px; height: 24px; fill: currentColor; }
 
-        /* --- DRAW ENGINE --- */
-        #paint-overlay { 
-            position: fixed; inset: 0; background: #fff; z-index: 2000; 
-            display: none; flex-direction: column; 
+        /* --- CONTENT --- */
+        .content { flex-grow: 1; overflow-y: auto; padding: 0 20px; }
+        
+        .hero-card {
+            padding: 30px; text-align: center; margin-top: 10px;
+            background: radial-gradient(circle at top right, rgba(0, 152, 234, 0.15), transparent);
         }
-        canvas { touch-action: none; flex-grow: 1; background: #fff; }
 
-        /* --- ADMIN SPECIFIC --- */
-        .admin-scroll { overflow-y: auto; flex-grow: 1; }
-        .user-row { 
-            display: flex; justify-content: space-between; 
-            padding: 10px; border-bottom: 1px solid var(--border); 
-            font-size: 12px;
+        .btn-action {
+            background: var(--accent); color: #fff; border: none;
+            width: 100%; padding: 20px; border-radius: 24px;
+            font-size: 16px; font-weight: 800; font-family: 'Orbitron';
+            box-shadow: 0 10px 30px var(--accent-glow);
+            transition: 0.2s; margin: 15px 0;
         }
+        .btn-action:active { transform: scale(0.96); opacity: 0.9; }
+
+        /* --- DRAW ENGINE OVERLAY --- */
+        #draw-overlay {
+            position: fixed; inset: 0; background: #fff; z-index: 5000;
+            display: none; flex-direction: column;
+        }
+        .draw-header {
+            background: #000; color: #fff; padding: calc(var(--safe-top) + 15px) 20px 15px;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        #main-canvas { flex-grow: 1; touch-action: none; cursor: crosshair; }
+        
+        .draw-tools {
+            background: #111; padding: 15px 20px calc(20px + var(--safe-bottom));
+            display: flex; flex-direction: column; gap: 15px;
+        }
+        .tool-row { display: flex; justify-content: space-between; align-items: center; }
+        .color-palette { display: flex; gap: 8px; overflow-x: auto; padding: 5px 0; }
+        .color-swatch { 
+            min-width: 32px; height: 32px; border-radius: 10px; 
+            border: 2px solid rgba(255,255,255,0.1); 
+        }
+        .color-swatch.active { transform: scale(1.2); border-color: var(--accent); box-shadow: 0 0 10px var(--accent); }
+
+        .brush-btn {
+            background: rgba(255,255,255,0.05); border: none; 
+            width: 44px; height: 44px; border-radius: 12px;
+            display: flex; align-items: center; justify-content: center;
+            color: #fff;
+        }
+        .brush-btn.active { background: var(--accent); }
+
+        /* --- ADMIN PANEL --- */
+        .admin-section { background: rgba(255, 59, 48, 0.05); border: 1px solid rgba(255, 59, 48, 0.2); border-radius: 20px; padding: 15px; margin-top: 20px; }
+        .stat-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; margin-bottom: 15px; }
+        .stat-item { background: #000; padding: 12px; border-radius: 12px; border: 1px solid #222; }
+
     </style>
 </head>
 <body>
 
-    <div id="scr-lobby" class="screen active">
-        <div style="text-align: center; margin-top: 40px;">
-            <h1 class="neon-title" style="font-size: 32px;">Draw a <span style="color:var(--neon-gold); text-shadow: 0 0 10px var(--neon-gold);">TON</span></h1>
-            <p style="font-size: 12px; opacity: 0.7;">ENTER THE CYBER ARENA</p>
-        </div>
+    <svg style="display:none">
+        <symbol id="icon-battle" viewBox="0 0 24 24"><path d="M21 13v10h-6v-6h-6v6h-6v-10l9-7 9 7zm-9-11l-12 9h3v10h5v-6h6v6h5v-10h3l-10-9z"/></symbol>
+        <symbol id="icon-top" viewBox="0 0 24 24"><path d="M6 20h3v-10h-3v10zm6 0h3v-14h-3v14zm6 0h3v-7h-3v7zm-12 2h18v-2h-18v2z"/></symbol>
+        <symbol id="icon-user" viewBox="0 0 24 24"><path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/></symbol>
+        <symbol id="icon-admin" viewBox="0 0 24 24"><path d="M12 1l-10 4.43v6.13c0 6.17 4.26 11.95 10 13.44 5.74-1.49 10-7.27 10-13.44v-6.13l-10-4.43zm0 2.18l8 3.54v5.38c0 5.15-3.52 9.98-8 11.32-4.48-1.34-8-6.17-8-11.32v-5.38l8-3.54z"/></symbol>
+        <symbol id="icon-brush" viewBox="0 0 24 24"><path d="M7 14c-1.1 0-2 .9-2 2 0 .34.08.66.23.94l-2.23 2.23c-.39.39-.39 1.02 0 1.41.39.39 1.02.39 1.41 0l2.23-2.23c.28.15.6.23.94.23 1.1 0 2-.9 2-2s-.9-2-2-2zm14.56-11.31c-1.52-1.52-3.98-1.52-5.5 0l-10.74 10.74c-.39.39-.39 1.02 0 1.41l4.09 4.09c.39.39 1.02.39 1.41 0l10.74-10.74c1.52-1.52 1.52-3.98 0-5.5z"/></symbol>
+        <symbol id="icon-undo" viewBox="0 0 24 24"><path d="M12.5 8c-2.65 0-5.05.99-6.9 2.6l-3.6-3.6v9h9l-3.62-3.62c1.39-1.16 3.16-1.88 5.12-1.88 3.54 0 6.55 2.31 7.6 5.5l2.37-.78C21.08 11.03 17.15 8 12.5 8z"/></symbol>
+    </svg>
 
-        <div class="glass-card" style="margin-top: 30px; text-align: center;">
-            <div id="wallet-status" style="color: var(--neon-gold); margin-bottom: 10px; font-weight: bold;">КОШЕЛЕК НЕ ПОДКЛЮЧЕН</div>
-            <button class="neon-btn" onclick="Wallet.connect()" id="btn-connect">ПОДКЛЮЧИТЬ КОШЕЛЕК</button>
+    <header class="header">
+        <div class="user-pill">
+            <img id="head-avatar" src="https://via.placeholder.com/40">
+            <span id="head-name" style="font-weight: 800; font-size: 14px;">Alexander</span>
         </div>
+        <div class="balance-card">
+            <span style="font-size: 10px; font-weight: 800; display: block; opacity: 0.8;">MY BALANCE</span>
+            <span id="head-balance" class="neon-text" style="font-size: 16px;">0.00 TON</span>
+        </div>
+    </header>
 
-        <div class="glass-card">
-            <div style="display: flex; justify-content: space-between;">
-                <span>ВАШ БАЛАНС:</span>
-                <b style="color: var(--neon-blue);" id="val-bal">0.00 TON</b>
+    <div id="scr-battle" class="screen active">
+        <div class="content">
+            <div class="hero-card glass">
+                <h1 class="neon-title" style="font-size: 38px; margin: 0;">Draw a <span style="color:var(--accent)">TON</span></h1>
+                <p style="color: var(--text-dim); margin: 15px 0 25px;">Самая масштабная Web3-битва художников</p>
+                
+                <div style="background: rgba(0,0,0,0.3); border-radius: 20px; padding: 20px; margin-bottom: 20px;">
+                    <span style="font-size: 12px; color: var(--accent); font-weight: 900; letter-spacing: 2px;">ТЕКУЩИЙ СТАТУС</span>
+                    <h2 id="game-status" style="margin: 10px 0; font-family: 'Orbitron';">ОЖИДАНИЕ...</h2>
+                    <div id="game-info" style="font-size: 14px; opacity: 0.6;">Вход: 0.1 TON • Приз: 1.5 TON</div>
+                </div>
+
+                <button class="btn-action" onclick="App.joinBattle()">ВСТУПИТЬ В БОЙ</button>
+                <div id="ton-connect-btn" style="margin-top: 10px;"></div>
             </div>
-            <button class="neon-btn" style="border-color: var(--neon-gold); color: var(--neon-gold); box-shadow: 0 0 10px var(--neon-gold);" onclick="Game.join()">УЧАСТВОВАТЬ (0.1 TON)</button>
+
+            <div class="glass" style="padding: 20px; margin-top: 20px;">
+                <h3 style="margin-top: 0;">Как это работает?</h3>
+                <ol style="padding-left: 20px; color: var(--text-dim); font-size: 14px; line-height: 1.8;">
+                    <li>Подключи свой <b style="color:#fff">Tonkeeper</b> или другой кошелек.</li>
+                    <li>Оплати входной взнос в 0.1 TON.</li>
+                    <li>Когда наберется 15 игроков — начнется раунд!</li>
+                    <li>У тебя 6 минут, чтобы нарисовать заданный предмет.</li>
+                    <li>Победитель забирает весь банк (минус комиссия 10%).</li>
+                </ol>
+            </div>
         </div>
     </div>
 
-    <div id="scr-admin" class="screen">
-        <h2 class="neon-title">Админ-Панель</h2>
-        <div class="admin-scroll">
-            <div class="glass-card">
-                <input type="text" id="adm-task" placeholder="Предмет для рисования" style="width:100%; padding:10px; background:#000; border:1px solid var(--neon-blue); color:#fff; border-radius:8px;">
-                <button class="neon-btn" onclick="Admin.startRound()">ЗАПУСТИТЬ БИТВУ</button>
-            </div>
-            <div id="users-list" class="glass-card">
+    <div id="scr-top" class="screen">
+        <div class="content">
+            <h2 class="neon-text">TOP LEGENDS</h2>
+            <div id="leaderboard-container">
                 </div>
         </div>
     </div>
 
-    <div id="paint-overlay">
-        <div style="background:#000; color:#fff; padding: 40px 20px 20px; display:flex; justify-content:space-between;">
-            <b id="timer" style="color:var(--neon-blue)">06:00</b>
-            <b id="task">РИСУЙ ТОН</b>
-            <button onclick="Game.submit()" style="background:var(--neon-blue); border:none; color:#000; font-weight:900; padding:5px 15px; border-radius:8px;">ОТПРАВИТЬ</button>
+    <div id="scr-admin" class="screen">
+        <div class="content">
+            <h2 class="neon-text" style="color: var(--danger)">CENTRAL COMMAND</h2>
+            
+            <div class="admin-section">
+                <h3>Управление Раундом</h3>
+                <input type="text" id="adm-subject" placeholder="Что рисуем сегодня?" 
+                       style="width:100%; padding:15px; background:#000; border:1px solid #333; color:#fff; border-radius:12px; margin-bottom:10px;">
+                <div class="stat-grid">
+                    <button class="btn-action" style="margin:0; padding:15px; font-size:12px;" onclick="Admin.startGame()">START ROUND</button>
+                    <button class="btn-action" style="margin:0; padding:15px; font-size:12px; background:#333;" onclick="Admin.resetGame()">RESET LOBBY</button>
+                </div>
+            </div>
+
+            <div class="admin-section" style="background: rgba(0, 152, 234, 0.05); border-color: rgba(0, 152, 234, 0.2);">
+                <h3>Финансы и Игроки</h3>
+                <div class="stat-grid">
+                    <div class="stat-item">
+                        <span style="font-size:10px; opacity:0.5;">BANK</span>
+                        <div style="font-weight:900; color:var(--accent);" id="adm-total-bank">0.00 TON</div>
+                    </div>
+                    <div class="stat-item">
+                        <span style="font-size:10px; opacity:0.5;">PLAYERS</span>
+                        <div style="font-weight:900;" id="adm-total-users">0</div>
+                    </div>
+                </div>
+                <div id="adm-users-list" style="max-height: 300px; overflow-y: auto;">
+                    </div>
+            </div>
         </div>
-        <canvas id="c"></canvas>
     </div>
 
-    <nav class="nav">
-        <button class="nav-item active" onclick="UI.nav('lobby', this)">БИТВА</button>
-        <button class="nav-item" onclick="UI.nav('admin', this)" id="nav-adm" style="display:none;">АДМИН</button>
+    <div id="draw-overlay">
+        <div class="draw-header">
+            <div id="draw-timer" style="font-family:'Orbitron'; color:var(--accent); font-size:20px;">06:00</div>
+            <div id="draw-task" style="font-weight:900; letter-spacing:2px;">КЕК</div>
+            <button onclick="Engine.submit()" style="background:var(--accent); color:#fff; border:none; padding:8px 20px; border-radius:12px; font-weight:900;">SUBMIT</button>
+        </div>
+        <canvas id="main-canvas"></canvas>
+        <div class="draw-tools">
+            <div class="tool-row">
+                <div class="color-palette" id="palette">
+                    </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="brush-btn active" id="tool-brush" onclick="Engine.setTool('brush')"><svg><use href="#icon-brush"></use></svg></button>
+                    <button class="brush-btn" id="tool-fill" onclick="Engine.setTool('fill')">🪣</button>
+                    <button class="brush-btn" onclick="Engine.undo()"><svg><use href="#icon-undo"></use></svg></button>
+                </div>
+            </div>
+            <div class="tool-row">
+                <input type="range" id="brush-size" min="2" max="50" value="5" style="width:100%; accent-color:var(--accent);">
+            </div>
+        </div>
+    </div>
+
+    <nav class="tab-bar">
+        <button class="tab-item active" onclick="UI.switchTab('battle', this)"><svg><use href="#icon-battle"></use></svg>Battle</button>
+        <button class="tab-item" onclick="UI.switchTab('top', this)"><svg><use href="#icon-top"></use></svg>Legends</button>
+        <button class="tab-item" onclick="UI.switchTab('admin', this)" id="tab-adm-btn" style="display:none;"><svg><use href="#icon-admin"></use></svg>Admin</button>
+        <button class="tab-item" onclick="UI.switchTab('profile', this)"><svg><use href="#icon-user"></use></svg>Profile</button>
     </nav>
 
     <script>
-        // --- DATA ---
+        // --- 1. INITIALIZATION & FIREBASE ---
         const firebaseConfig = {
             apiKey: "AIzaSyBawoHndJxGvNGbGxq5RnuCIA2doGKSQOM",
             authDomain: "paint-tg.firebaseapp.com",
             databaseURL: "https://paint-tg-default-rtdb.firebaseio.com",
             projectId: "paint-tg",
-            databaseURL: "https://paint-tg-default-rtdb.firebaseio.com"
+            storageBucket: "paint-tg.firebasestorage.app",
+            messagingSenderId: "1072051223023",
+            appId: "1:1072051223023:web:946b3082fe853666581e1a"
         };
         firebase.initializeApp(firebaseConfig);
         const db = firebase.database();
         const tg = window.Telegram.WebApp;
-        const user = tg.initDataUnsafe.user || { id: 1, first_name: "Boss", username: "Kegovich" };
+        const rawUser = tg.initDataUnsafe.user || { id: 777, first_name: "Art_Master", username: "Kegovich" };
 
-        // --- WALLET (TONCONNECT) ---
-        const connector = new TonConnectSDK.TonConnect();
-        
-        const Wallet = {
-            async connect() {
-                const walletConnectionSource = {
-                    universalLink: 'https://tonkeeper.com/ton-connect',
-                    bridgeUrl: 'https://bridge.tonapi.io/bridge'
-                };
-                const url = connector.connect(walletConnectionSource);
-                tg.openLink(url);
-            }
-        };
-
-        connector.onStatusChange(w => {
-            if (w) {
-                document.getElementById('wallet-status').innerText = "ПОДКЛЮЧЕНО: " + w.account.address.slice(0,6) + "...";
-                db.ref('users/' + user.id + '/address').set(w.account.address);
-            }
+        // --- 2. TON CONNECT 2.0 ---
+        const tonConnectUI = new TON_CONNECT_UI.TonConnectUI({
+            manifestUrl: 'https://kegovich.github.io/draw-a-ton/tonconnect-manifest.json', // Замени на свой реальный url манифеста
+            buttonRootId: 'ton-connect-btn'
         });
 
-        // --- GAME LOGIC ---
-        const Game = {
+        // --- 3. APP LOGIC ---
+        const App = {
+            user: null,
             init() {
-                if(user.username === 'Kegovich') {
-                    document.getElementById('nav-adm').style.display = 'block';
-                    Admin.listen();
+                tg.expand();
+                this.syncUser();
+                this.listenGame();
+                if(rawUser.username === 'Kegovich') {
+                    document.getElementById('tab-adm-btn').style.display = 'flex';
+                    Admin.init();
                 }
-                this.sync();
-                this.listenState();
             },
-            sync() {
-                db.ref('users/' + user.id).on('value', s => {
-                    const data = s.val() || { name: user.first_name, balance: 0.0 };
-                    document.getElementById('val-bal').innerText = (data.balance || 0).toFixed(2) + " TON";
+
+            syncUser() {
+                const ref = db.ref('users/' + rawUser.id);
+                ref.on('value', s => {
+                    this.user = s.val() || {
+                        name: rawUser.first_name,
+                        balance: 0.5, // Приветственный бонус
+                        wins: 0,
+                        avatar: rawUser.photo_url || `https://api.dicebear.com/7.x/pixel-art/svg?seed=${rawUser.id}`
+                    };
+                    if(!s.exists()) ref.set(this.user);
+                    
+                    document.getElementById('head-name').innerText = this.user.name;
+                    document.getElementById('head-balance').innerText = this.user.balance.toFixed(2) + " TON";
+                    document.getElementById('head-avatar').src = this.user.avatar;
                 });
             },
-            listenState() {
+
+            listenGame() {
                 db.ref('game_state').on('value', s => {
-                    const st = s.val();
-                    if(st && st.status === 'drawing') {
-                        document.getElementById('paint-overlay').style.display = 'flex';
-                        Engine.init();
+                    const state = s.val();
+                    if(!state) return;
+                    
+                    document.getElementById('game-status').innerText = state.status === 'lobby' ? 'В ПОИСКЕ...' : 'ИДЕТ БИТВА!';
+                    
+                    if(state.status === 'drawing') {
+                        UI.toggleOverlay(true, state.subject, state.endTime);
                     } else {
-                        document.getElementById('paint-overlay').style.display = 'none';
+                        UI.toggleOverlay(false);
                     }
                 });
             },
-            join() {
-                // В реальности тут вызывается транзакция через connector.sendTransaction
-                alert("Транзакция отправлена в кошелек...");
-            }
-        };
 
-        const Admin = {
-            startRound() {
-                const t = document.getElementById('adm-task').value;
-                db.ref('game_state').set({ status: 'drawing', subject: t, endTime: Date.now() + 360000 });
-            },
-            listen() {
-                db.ref('users').on('value', s => {
-                    const list = document.getElementById('users-list');
-                    list.innerHTML = "<h4>ИГРОКИ:</h4>";
-                    s.forEach(u => {
-                        const d = u.val();
-                        list.innerHTML += `<div class="user-row"><span>${d.name}</span><b>${(d.balance||0).toFixed(2)} TON</b></div>`;
-                    });
-                });
-            }
-        };
-
-        const UI = {
-            nav(id, el) {
-                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
-                document.getElementById('scr-' + id).classList.add('active');
-                document.querySelectorAll('.nav-item').forEach(n => n.classList.remove('active'));
-                el.classList.add('active');
-            }
-        };
-
-        const Engine = {
-            init() {
-                const canvas = document.getElementById('c');
-                const ctx = canvas.getContext('2d');
-                canvas.width = window.innerWidth;
-                canvas.height = window.innerHeight - 150;
-                ctx.strokeStyle = "#000"; ctx.lineWidth = 5;
+            async joinBattle() {
+                if(this.user.balance < 0.1) return alert("Недостаточно TON на игровом балансе!");
                 
-                let draw = false;
-                canvas.ontouchstart = (e) => { draw = true; ctx.beginPath(); };
-                canvas.ontouchmove = (e) => {
-                    if(!draw) return;
-                    const t = e.touches[0];
-                    ctx.lineTo(t.clientX, t.clientY - 100);
-                    ctx.stroke();
+                // Реальная транзакция (пример структуры)
+                /*
+                const transaction = {
+                    validUntil: Math.floor(Date.now() / 1000) + 60,
+                    messages: [{ address: "ВАШ_АДРЕС_КОШЕЛЬКА", amount: "100000000" }] // 0.1 TON
                 };
-                canvas.ontouchend = () => draw = false;
+                try { await tonConnectUI.sendTransaction(transaction); } catch(e) { return; }
+                */
+
+                db.ref('users/' + rawUser.id + '/balance').transaction(b => b - 0.1);
+                db.ref('lobby_players/' + rawUser.id).set({ name: this.user.name, avatar: this.user.avatar });
+                tg.HapticFeedback.notificationOccurred('success');
+                alert("Вы вступили в очередь!");
             }
         };
 
-        Game.init();
+        // --- 4. ENGINE: PROFESSIONAL CANVAS ---
+        const Engine = {
+            canvas: null, ctx: null, 
+            isDrawing: false, lastX: 0, lastY: 0,
+            color: '#000000', size: 5, tool: 'brush',
+            history: [],
+
+            init() {
+                this.canvas = document.getElementById('main-canvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight - 200;
+                
+                this.ctx.fillStyle = '#ffffff';
+                this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+
+                this.setupPalette();
+                this.setupEvents();
+            },
+
+            setupPalette() {
+                const colors = ['#000000', '#FFFFFF', '#FF3B30', '#4CD964', '#007AFF', '#FFCC00', '#AF52DE', '#FF9500'];
+                const container = document.getElementById('palette');
+                container.innerHTML = "";
+                colors.forEach(c => {
+                    const div = document.createElement('div');
+                    div.className = 'color-swatch' + (c === this.color ? ' active' : '');
+                    div.style.background = c;
+                    div.onclick = () => {
+                        this.color = c;
+                        document.querySelectorAll('.color-swatch').forEach(s => s.classList.remove('active'));
+                        div.classList.add('active');
+                    };
+                    container.appendChild(div);
+                });
+            },
+
+            setupEvents() {
+                const getCoords = (e) => {
+                    const t = e.touches ? e.touches[0] : e;
+                    const rect = this.canvas.getBoundingClientRect();
+                    return [t.clientX - rect.left, t.clientY - rect.top];
+                };
+
+                const start = (e) => {
+                    this.isDrawing = true;
+                    [this.lastX, this.lastY] = getCoords(e);
+                    if(this.tool === 'fill') this.floodFill(Math.floor(this.lastX), Math.floor(this.lastY));
+                    this.saveHistory();
+                };
+
+                const move = (e) => {
+                    if(!this.isDrawing || this.tool === 'fill') return;
+                    const [x, y] = getCoords(e);
+                    
+                    this.ctx.beginPath();
+                    this.ctx.moveTo(this.lastX, this.lastY);
+                    this.ctx.lineTo(x, y);
+                    this.ctx.strokeStyle = this.tool === 'eraser' ? '#ffffff' : this.color;
+                    this.ctx.lineWidth = document.getElementById('brush-size').value;
+                    this.ctx.stroke();
+                    
+                    [this.lastX, this.lastY] = [x, y];
+                };
+
+                this.canvas.addEventListener('touchstart', start);
+                this.canvas.addEventListener('touchmove', move);
+                window.addEventListener('touchend', () => this.isDrawing = false);
+            },
+
+            setTool(t) {
+                this.tool = t;
+                document.querySelectorAll('.brush-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('tool-' + t).classList.add('active');
+            },
+
+            saveHistory() {
+                if(this.history.length > 20) this.history.shift();
+                this.history.push(this.canvas.toDataURL());
+            },
+
+            undo() {
+                if(this.history.length < 1) return;
+                const last = this.history.pop();
+                const img = new Image();
+                img.src = last;
+                img.onload = () => {
+                    this.ctx.fillStyle = '#ffffff';
+                    this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+                    this.ctx.drawImage(img, 0, 0);
+                };
+            },
+
+            floodFill(startX, startY) {
+                const imageData = this.ctx.getImageData(0, 0, this.canvas.width, this.canvas.height);
+                const targetColor = this.getPixel(imageData, startX, startY);
+                const fillColor = this.hexToRgb(this.color);
+                
+                if(this.colorsMatch(targetColor, fillColor)) return;
+
+                const pixelsToCheck = [startX, startY];
+                while (pixelsToCheck.length > 0) {
+                    const y = pixelsToCheck.pop();
+                    const x = pixelsToCheck.pop();
+                    
+                    const currentColor = this.getPixel(imageData, x, y);
+                    if (this.colorsMatch(currentColor, targetColor)) {
+                        this.setPixel(imageData, x, y, fillColor);
+                        pixelsToCheck.push(x + 1, y, x - 1, y, x, y + 1, x, y - 1);
+                    }
+                }
+                this.ctx.putImageData(imageData, 0, 0);
+            },
+
+            // Утилиты для заливки
+            getPixel(img, x, y) {
+                const i = (y * img.width + x) * 4;
+                return [img.data[i], img.data[i+1], img.data[i+2]];
+            },
+            setPixel(img, x, y, c) {
+                const i = (y * img.width + x) * 4;
+                img.data[i] = c[0]; img.data[i+1] = c[1]; img.data[i+2] = c[2]; img.data[i+3] = 255;
+            },
+            colorsMatch(c1, c2) { return c1[0]===c2[0] && c1[1]===c2[1] && c1[2]===c2[2]; },
+            hexToRgb(hex) {
+                const r = parseInt(hex.slice(1,3), 16), g = parseInt(hex.slice(3,5), 16), b = parseInt(hex.slice(5,7), 16);
+                return [r, g, b];
+            },
+
+            submit() {
+                const data = this.canvas.toDataURL('image/webp', 0.7);
+                db.ref('submissions/' + rawUser.id).set({
+                    img: data,
+                    user: rawUser.first_name,
+                    votes: 0
+                });
+                alert("Рисунок отправлен на голосование!");
+                UI.toggleOverlay(false);
+            }
+        };
+
+        // --- 5. ADMIN CONTROLS ---
+        const Admin = {
+            init() {
+                this.listenUsers();
+                db.ref('game_bank').on('value', s => document.getElementById('adm-total-bank').innerText = (s.val() || 0).toFixed(2) + " TON");
+            },
+
+            startGame() {
+                const sub = document.getElementById('adm-subject').value;
+                if(!sub) return alert("Введите тему!");
+                db.ref('game_state').set({
+                    status: 'drawing',
+                    subject: sub.toUpperCase(),
+                    endTime: Date.now() + 360000
+                });
+            },
+
+            resetGame() {
+                db.ref('game_state').set({ status: 'lobby' });
+                db.ref('lobby_players').remove();
+                db.ref('submissions').remove();
+            },
+
+            listenUsers() {
+                db.ref('users').on('value', s => {
+                    const list = document.getElementById('adm-users-list');
+                    list.innerHTML = "";
+                    let count = 0;
+                    s.forEach(child => {
+                        count++;
+                        const u = child.val();
+                        list.innerHTML += `
+                            <div class="user-row" style="background:rgba(255,255,255,0.02); margin-bottom:5px; border-radius:8px;">
+                                <span>${u.name}</span>
+                                <div style="display:flex; gap:10px;">
+                                    <b style="color:var(--accent)">${u.balance.toFixed(2)}</b>
+                                    <button onclick="Admin.grant('${child.key}')" style="background:none; border:none; color:var(--success)">+</button>
+                                </div>
+                            </div>
+                        `;
+                    });
+                    document.getElementById('adm-total-users').innerText = count;
+                });
+            },
+
+            grant(uid) {
+                const amt = parseFloat(prompt("Сколько TON выдать?"));
+                if(amt) db.ref('users/'+uid+'/balance').transaction(b => b + amt);
+            }
+        };
+
+        // --- 6. UI MANAGER ---
+        const UI = {
+            switchTab(tabId, el) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.querySelectorAll('.tab-item').forEach(t => t.classList.remove('active'));
+                document.getElementById('scr-' + tabId).classList.add('active');
+                el.classList.add('active');
+                tg.HapticFeedback.selectionChanged();
+            },
+
+            toggleOverlay(show, task = "", end = 0) {
+                const ov = document.getElementById('draw-overlay');
+                ov.style.display = show ? 'flex' : 'none';
+                if(show) {
+                    document.getElementById('draw-task').innerText = task;
+                    Engine.init();
+                    this.startTimer(end);
+                }
+            },
+
+            startTimer(end) {
+                const el = document.getElementById('draw-timer');
+                const update = () => {
+                    const diff = end - Date.now();
+                    if(diff <= 0) {
+                        clearInterval(this.timerInterval);
+                        el.innerText = "00:00";
+                        Engine.submit();
+                    } else {
+                        const m = Math.floor(diff/60000), s = Math.floor((diff%60000)/1000);
+                        el.innerText = `${m}:${s < 10 ? '0'+s : s}`;
+                    }
+                };
+                update();
+                this.timerInterval = setInterval(update, 1000);
+            }
+        };
+
+        // RUN
+        App.init();
     </script>
 </body>
 </html>
