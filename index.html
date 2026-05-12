@@ -1,0 +1,390 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <title>TON Paint Battle Pro</title>
+    
+    <!-- SDK -->
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-app-compat.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/9.22.0/firebase-database-compat.js"></script>
+    <script src="https://telegram.org/js/telegram-web-app.js"></script>
+    
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Montserrat:wght@400;700;900&display=swap');
+
+        :root {
+            --bg: #050505;
+            --accent: #0098ea;
+            --card: #121214;
+            --danger: #ff4d4d;
+            --success: #00c853;
+            --text: #ffffff;
+            --glass: rgba(255, 255, 255, 0.05);
+            --safe-top: env(safe-area-inset-top);
+            --safe-bottom: env(safe-area-inset-bottom);
+        }
+
+        * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; outline: none; }
+        
+        body, html { 
+            margin: 0; padding: 0; width: 100%; height: 100%; 
+            background: var(--bg); color: var(--text);
+            font-family: 'Montserrat', sans-serif; overflow: hidden;
+        }
+
+        /* --- SCREENS --- */
+        .screen { 
+            position: absolute; inset: 0; display: none; 
+            flex-direction: column; background: var(--bg);
+            transition: 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        .screen.active { display: flex; animation: slideUp 0.4s ease; }
+
+        @keyframes slideUp { from { transform: translateY(20px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
+
+        /* --- UI COMPONENTS --- */
+        .glass-panel { background: var(--glass); backdrop-filter: blur(20px); border: 1px solid rgba(255,255,255,0.1); border-radius: 24px; }
+        .btn-main { background: var(--accent); color: #fff; border: none; padding: 18px; border-radius: 20px; font-weight: 900; font-size: 16px; width: 100%; box-shadow: 0 10px 25px rgba(0, 152, 234, 0.3); transition: 0.2s; }
+        .btn-main:active { transform: scale(0.96); opacity: 0.9; }
+
+        /* --- HEADER --- */
+        .header { padding: calc(var(--safe-top) + 20px) 20px 20px; display: flex; align-items: center; justify-content: space-between; }
+        .user-block { display: flex; align-items: center; gap: 12px; }
+        .avatar-frame { width: 54px; height: 54px; border-radius: 18px; padding: 3px; background: linear-gradient(45deg, var(--accent), #7c3aed); position: relative; }
+        .avatar-frame img { width: 100%; height: 100%; border-radius: 15px; object-fit: cover; background: #222; }
+
+        /* --- NAVIGATION --- */
+        .navbar { position: fixed; bottom: 0; width: 100%; padding-bottom: var(--safe-bottom); background: rgba(10,10,12,0.9); backdrop-filter: blur(25px); border-top: 1px solid rgba(255,255,255,0.05); display: flex; justify-content: space-around; z-index: 100; }
+        .nav-link { background: none; border: none; color: #555; padding: 15px; display: flex; flex-direction: column; align-items: center; gap: 4px; transition: 0.3s; }
+        .nav-link.active { color: var(--accent); }
+        .nav-link svg { width: 26px; height: 26px; stroke: currentColor; fill: none; stroke-width: 2; }
+
+        /* --- LEADERBOARD --- */
+        .top-list { padding: 10px 20px 100px; overflow-y: auto; }
+        .player-row { display: flex; align-items: center; gap: 15px; padding: 15px; background: var(--card); border-radius: 20px; margin-bottom: 10px; border: 1px solid rgba(255,255,255,0.03); }
+        .rank-num { font-size: 20px; font-weight: 900; opacity: 0.3; min-width: 30px; }
+
+        /* --- PAINTING ENGINE (THE BEAST) --- */
+        #paint-screen { position: fixed; inset: 0; background: #fff; z-index: 1000; display: none; flex-direction: column; }
+        .paint-head { background: #000; padding: calc(var(--safe-top) + 10px) 15px 15px; display: flex; justify-content: space-between; align-items: center; }
+        #canvas-wrap { flex-grow: 1; position: relative; overflow: hidden; background: #f0f0f0; }
+        canvas { background: #fff; touch-action: none; display: block; }
+
+        .palette { display: flex; gap: 8px; padding: 15px; background: #111; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+        .color-dot { min-width: 35px; height: 35px; border-radius: 10px; border: 2px solid rgba(255,255,255,0.1); }
+        .color-dot.active { transform: scale(1.2); border-color: var(--accent); }
+
+        .tools-bar { position: absolute; bottom: 80px; left: 50%; transform: translateX(-50%); display: flex; gap: 12px; padding: 10px 20px; background: rgba(0,0,0,0.8); border-radius: 30px; backdrop-filter: blur(15px); border: 1px solid rgba(255,255,255,0.2); }
+        .tool-btn { width: 45px; height: 45px; border-radius: 50%; border: none; background: transparent; display: flex; align-items: center; justify-content: center; transition: 0.2s; }
+        .tool-btn.active { background: var(--accent); box-shadow: 0 0 15px var(--accent); }
+        .tool-btn svg { width: 22px; height: 22px; stroke: #fff; fill: none; stroke-width: 2; }
+
+        /* --- ADMIN PANEL --- */
+        .admin-card { margin: 20px; padding: 20px; background: rgba(255,77,77,0.05); border: 1px solid var(--danger); border-radius: 24px; }
+        .admin-input { width: 100%; background: #000; border: 1px solid #333; padding: 15px; border-radius: 15px; color: #fff; font-family: inherit; margin-bottom: 12px; }
+    </style>
+</head>
+<body>
+
+    <!-- LOBBY SCREEN -->
+    <div id="screen-lobby" class="screen active">
+        <div class="header">
+            <div class="user-block">
+                <div class="avatar-frame"><img id="u-avatar" src=""></div>
+                <div>
+                    <div id="u-name" style="font-weight: 900; font-size: 18px;">Player</div>
+                    <div style="color: var(--accent); font-size: 13px; font-weight: 700;">PRO ARTIST</div>
+                </div>
+            </div>
+            <div class="glass-panel" style="padding: 10px 18px;">
+                <span style="font-size: 12px; color: #888; display: block;">Баланс</span>
+                <b style="color: var(--accent); font-size: 18px;">💎 <span id="u-balance">0.00</span></b>
+            </div>
+        </div>
+
+        <div class="top-list">
+            <div class="glass-panel" style="padding: 25px; text-align: center; border: 2px solid var(--accent); margin-bottom: 25px;">
+                <h3 id="game-title" style="margin: 0; font-size: 24px; letter-spacing: -1px;">ОЖИДАНИЕ ИГРЫ</h3>
+                <p id="game-desc" style="color: #888; font-size: 14px; margin: 10px 0 20px;">Вступительный взнос: 0.1 TON</p>
+                <button class="btn-main" onclick="Game.join()">ВСТУПИТЬ В БИТВУ</button>
+            </div>
+
+            <div style="display: flex; gap: 10px; margin-bottom: 25px;">
+                <div class="glass-panel" style="flex:1; padding: 15px; text-align: center;">
+                    <span style="font-size: 11px; color: #888;">ПОБЕД</span>
+                    <div id="u-wins" style="font-size: 22px; font-weight: 900;">0</div>
+                </div>
+                <div class="glass-panel" style="flex:1; padding: 15px; text-align: center;">
+                    <span style="font-size: 11px; color: #888;">ВЫПЛАТЫ</span>
+                    <div id="u-earned" style="font-size: 22px; font-weight: 900; color: var(--success);">0.0</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TOP LIST SCREEN -->
+    <div id="screen-top" class="screen">
+        <div class="header"><h1>Зал Славы</h1></div>
+        <div id="leader-container" class="top-list"></div>
+    </div>
+
+    <!-- PROFILE & ADMIN SCREEN -->
+    <div id="screen-profile" class="screen">
+        <div class="header"><h1>Настройки</h1></div>
+        <div class="top-list">
+            <button class="btn-main" onclick="Game.deposit()" style="background: var(--success);">ПОПОЛНИТЬ TON</button>
+            
+            <div id="admin-panel" class="admin-card" style="display: none;">
+                <h3 style="color: var(--danger); margin-top: 0;">🛠 ПАНЕЛЬ КЕГОВИЧА</h3>
+                <input type="text" id="admin-sub" class="admin-input" placeholder="Название предмета...">
+                <button class="btn-main" style="background: var(--danger);" onclick="Admin.start()">ЗАПУСТИТЬ БИТВУ</button>
+                <button class="btn-main" style="background: #333; margin-top: 8px;" onclick="Admin.reset()">СБРОС ЛОББИ</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- PAINT OVERLAY -->
+    <div id="paint-screen">
+        <div class="paint-head">
+            <div id="p-timer" style="color: var(--accent); font-weight: 900; font-size: 20px;">06:00</div>
+            <div id="p-task" style="font-weight: 900; text-transform: uppercase;">ЗАДАНИЕ</div>
+            <button onclick="Game.submit()" style="background: var(--accent); border: none; color: #fff; padding: 8px 18px; border-radius: 12px; font-weight: 900;">ГОТОВО</button>
+        </div>
+        
+        <div id="canvas-wrap">
+            <canvas id="mainCanvas"></canvas>
+            
+            <div class="tools-bar">
+                <button class="tool-btn active" id="t-brush" onclick="Engine.setTool('brush')">
+                    <svg viewBox="0 0 24 24"><path d="M12 19l7-7 3 3-7 7-3-3zM12 19l-7-7 3-3 7 7-3 3zM18 13l-1.5-1.5L4 24l1.5 1.5L18 13z"/></svg>
+                </button>
+                <button class="tool-btn" id="t-fill" onclick="Engine.setTool('fill')">
+                    <svg viewBox="0 0 24 24"><path d="M19 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2zM7 14l5 5 5-5"/></svg>
+                </button>
+                <button class="tool-btn" id="t-eraser" onclick="Engine.setTool('eraser')">
+                    <svg viewBox="0 0 24 24"><path d="M18 4l4 4-10 10-4-4L18 4zM2 20h20"/></svg>
+                </button>
+                <button class="tool-btn" onclick="Engine.undo()">
+                    <svg viewBox="0 0 24 24"><path d="M9 14l-4-4 4-4M5 10h11a4 4 0 1 1 0 8h-1"/></svg>
+                </button>
+            </div>
+        </div>
+
+        <div class="palette" id="colors"></div>
+    </div>
+
+    <!-- NAVBAR -->
+    <nav class="navbar">
+        <button class="nav-link active" onclick="UI.nav('lobby', this)">
+            <svg viewBox="0 0 24 24"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/></svg>
+            <span>БИТВА</span>
+        </button>
+        <button class="nav-link" onclick="UI.nav('top', this)">
+            <svg viewBox="0 0 24 24"><path d="M8 21v-4a2 2 0 1 1 4 0v4M4 4h16M4 12h16M4 20h16"/></svg>
+            <span>ТОПЫ</span>
+        </button>
+        <button class="nav-link" onclick="UI.nav('profile', this)">
+            <svg viewBox="0 0 24 24"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2M12 11a4 4 0 1 0 0-8 4 4 0 0 0 0 8z"/></svg>
+            <span>ПРОФИЛЬ</span>
+        </button>
+    </nav>
+
+    <script>
+        // FIREBASE CONFIG
+        const firebaseConfig = {
+            apiKey: "AIzaSyBawoHndJxGvNGbGxq5RnuCIA2doGKSQOM",
+            authDomain: "paint-tg.firebaseapp.com",
+            databaseURL: "https://paint-tg-default-rtdb.firebaseio.com",
+            projectId: "paint-tg",
+            storageBucket: "paint-tg.firebasestorage.app",
+            messagingSenderId: "1072051223023",
+            appId: "1:1072051223023:web:946b3082fe853666581e1a"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.database();
+        const tg = window.Telegram.WebApp;
+        const user = tg.initDataUnsafe.user || { id: 777, first_name: "Master", username: "Kegovich" };
+
+        // THEME COLORS
+        const colors = ['#000000', '#FFFFFF', '#FF3B30', '#FF9500', '#FFCC00', '#4CD964', '#5AC8FA', '#007AFF', '#5856D6', '#AF52DE', '#8E8E93', '#A2845E'];
+
+        const Game = {
+            userData: {},
+            init() {
+                tg.expand();
+                this.sync();
+                this.loadLeaderboard();
+                this.listenGame();
+                Engine.createPalette();
+                if(user.username === 'Kegovich') document.getElementById('admin-panel').style.display = 'block';
+            },
+            sync() {
+                db.ref('users/' + user.id).on('value', s => {
+                    this.userData = s.val() || { name: user.first_name, wins: 0, balance: 5.0, earned: 0.0, avatar: user.photo_url || 'https://api.dicebear.com/7.x/bottts/svg?seed='+user.id };
+                    if(!s.exists()) db.ref('users/' + user.id).set(this.userData);
+                    
+                    document.getElementById('u-name').innerText = this.userData.name;
+                    document.getElementById('u-balance').innerText = this.userData.balance.toFixed(2);
+                    document.getElementById('u-wins').innerText = this.userData.wins;
+                    document.getElementById('u-earned').innerText = this.userData.earned.toFixed(1);
+                    document.getElementById('u-avatar').src = this.userData.avatar;
+                });
+            },
+            listenGame() {
+                db.ref('game_state').on('value', s => {
+                    const state = s.val();
+                    if(!state) return;
+                    if(state.status === 'drawing') {
+                        UI.showPaint(true, state.subject, state.endTime);
+                    } else {
+                        UI.showPaint(false);
+                    }
+                });
+            },
+            join() {
+                if(this.userData.balance < 0.1) return alert("Мало TON!");
+                tg.HapticFeedback.impactOccurred('medium');
+                alert("Ожидание противников...");
+            },
+            submit() {
+                const img = document.getElementById('mainCanvas').toDataURL('image/webp', 0.5);
+                db.ref('drawings/' + user.id).set({ img, name: user.first_name });
+                alert("Рисунок отправлен!");
+                UI.showPaint(false);
+            },
+            deposit() {
+                const a = prompt("Сколько TON?", "1.0");
+                if(a) db.ref('users/' + user.id + '/balance').transaction(b => b + parseFloat(a));
+            },
+            loadLeaderboard() {
+                db.ref('users').orderByChild('wins').limitToLast(10).on('value', s => {
+                    const cont = document.getElementById('leader-container');
+                    cont.innerHTML = "";
+                    let arr = [];
+                    s.forEach(c => { arr.push(c.val()); });
+                    arr.reverse().forEach((p, i) => {
+                        cont.innerHTML += `
+                            <div class="player-row">
+                                <div class="rank-num">#${i+1}</div>
+                                <img src="${p.avatar}" style="width:40px; height:40px; border-radius:10px;">
+                                <div style="flex-grow:1; font-weight:700;">${p.name}</div>
+                                <div style="color:var(--accent); font-weight:900;">${p.wins} W</div>
+                            </div>
+                        `;
+                    });
+                });
+            }
+        };
+
+        const Engine = {
+            canvas: null, ctx: null, drawing: false, tool: 'brush', color: '#000000', history: [],
+            init() {
+                this.canvas = document.getElementById('mainCanvas');
+                this.ctx = this.canvas.getContext('2d');
+                this.canvas.width = window.innerWidth;
+                this.canvas.height = window.innerHeight - 180;
+                this.ctx.lineCap = 'round';
+                this.ctx.lineJoin = 'round';
+                this.clear();
+                this.bind();
+            },
+            createPalette() {
+                const p = document.getElementById('colors');
+                colors.forEach(c => {
+                    const d = document.createElement('div');
+                    d.className = 'color-dot';
+                    d.style.background = c;
+                    if(c === '#000000') d.classList.add('active');
+                    d.onclick = () => {
+                        this.color = c;
+                        document.querySelectorAll('.color-dot').forEach(x => x.classList.remove('active'));
+                        d.classList.add('active');
+                    };
+                    p.appendChild(d);
+                });
+            },
+            bind() {
+                const getPos = (e) => {
+                    const r = this.canvas.getBoundingClientRect();
+                    const t = e.touches ? e.touches[0] : e;
+                    return { x: t.clientX - r.left, y: t.clientY - r.top };
+                };
+                const start = (e) => {
+                    this.drawing = true;
+                    this.ctx.beginPath();
+                    const p = getPos(e);
+                    this.ctx.moveTo(p.x, p.y);
+                };
+                const move = (e) => {
+                    if(!this.drawing) return;
+                    const p = getPos(e);
+                    this.ctx.lineTo(p.x, p.y);
+                    this.ctx.strokeStyle = this.tool === 'eraser' ? '#fff' : this.color;
+                    this.ctx.lineWidth = this.tool === 'eraser' ? 30 : 6;
+                    this.ctx.stroke();
+                };
+                this.canvas.onmousedown = this.canvas.ontouchstart = start;
+                this.canvas.onmousemove = this.canvas.ontouchmove = move;
+                window.onmouseup = window.ontouchend = () => { if(this.drawing) { this.drawing = false; this.history.push(this.canvas.toDataURL()); }};
+            },
+            setTool(t) {
+                this.tool = t;
+                document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
+                document.getElementById('t-'+t).classList.add('active');
+            },
+            undo() {
+                if(this.history.length > 0) {
+                    this.history.pop();
+                    const img = new Image();
+                    img.src = this.history[this.history.length-1] || "";
+                    img.onload = () => { this.clear(); if(img.src) this.ctx.drawImage(img, 0, 0); };
+                    if(!this.history.length) this.clear();
+                }
+            },
+            clear() { this.ctx.fillStyle = "#fff"; this.ctx.fillRect(0,0,this.canvas.width,this.canvas.height); }
+        };
+
+        const Admin = {
+            start() {
+                const s = document.getElementById('admin-sub').value;
+                if(!s) return alert("Тема?");
+                db.ref('game_state').set({ status: 'drawing', subject: s.toUpperCase(), endTime: Date.now() + 360000 });
+            },
+            reset() { db.ref('game_state').set({ status: 'lobby' }); }
+        };
+
+        const UI = {
+            nav(id, el) {
+                document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                document.getElementById('screen-'+id).classList.add('active');
+                el.classList.add('active');
+                tg.HapticFeedback.selectionChanged();
+            },
+            showPaint(show, task, end) {
+                const s = document.getElementById('paint-screen');
+                s.style.display = show ? 'flex' : 'none';
+                if(show) {
+                    document.getElementById('p-task').innerText = task;
+                    Engine.init();
+                    this.timer(end);
+                }
+            },
+            timer(end) {
+                const el = document.getElementById('p-timer');
+                const i = setInterval(() => {
+                    const diff = end - Date.now();
+                    if(diff <= 0) { clearInterval(i); el.innerText = "00:00"; }
+                    else {
+                        const m = Math.floor(diff/60000), s = Math.floor((diff%60000)/1000);
+                        el.innerText = `${m}:${s<10?'0':''}${s}`;
+                    }
+                }, 1000);
+            }
+        };
+
+        Game.init();
+    </script>
+</body>
+</html>
