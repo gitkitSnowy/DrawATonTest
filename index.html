@@ -143,6 +143,32 @@
     }
     .btn-action:active { transform: scale(0.96); opacity: 0.9; }
 
+    /* Чат для всех */
+    .public-chat {
+      background: #0a0a0f;
+      border-radius: 22px;
+      border: 1px solid #1f2937;
+      padding: 14px;
+      margin-top: 20px;
+    }
+    .chat-messages-box {
+      height: 200px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 8px;
+      padding-right: 4px;
+    }
+    .chat-msg {
+      background: #161b24;
+      padding: 10px 14px;
+      border-radius: 16px;
+      font-size: 14px;
+      max-width: 85%;
+      word-break: break-word;
+    }
+    .chat-msg strong { color: var(--accent); }
+
     #draw-overlay {
       position: fixed;
       inset: 0;
@@ -195,25 +221,6 @@
       padding: 16px;
       margin: 12px 0;
     }
-    .chat-box {
-      background: #0a0a0a;
-      border-radius: 20px;
-      padding: 14px;
-      height: 280px;
-      overflow-y: auto;
-      display: flex;
-      flex-direction: column;
-      gap: 8px;
-      border: 1px solid #222;
-    }
-    .msg {
-      background: #1a1f2b;
-      padding: 10px 14px;
-      border-radius: 18px;
-      max-width: 85%;
-      font-size: 14px;
-    }
-    .msg strong { color: var(--accent); }
   </style>
 </head>
 <body>
@@ -237,7 +244,7 @@
     </div>
   </header>
 
-  <!-- BATTLE SCREEN -->
+  <!-- BATTLE SCREEN с общим чатом -->
   <div id="scr-battle" class="screen active">
     <div class="content" style="padding:10px 20px;overflow-y:auto;">
       <div class="glass" style="padding:24px;text-align:center;margin-top:10px;">
@@ -254,6 +261,16 @@
       <div id="active-drawing-notice" style="display:none;margin-top:14px;background:var(--accent);padding:12px;border-radius:12px;color:#000;text-align:center;font-weight:bold;">
         Идёт рисование! Вы не в этом раунде.
       </div>
+
+      <!-- ОБЩИЙ ЧАТ ДЛЯ ВСЕХ -->
+      <div class="public-chat">
+        <h4 style="margin-bottom:10px;color:var(--text-dim);">💬 Общий чат</h4>
+        <div id="public-chat-messages" class="chat-messages-box"></div>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <input type="text" id="public-chat-input" placeholder="Сообщение..." style="flex:1;padding:12px;background:#000;border:1px solid #333;color:#fff;border-radius:14px;">
+          <button onclick="Chat.sendPublic()" style="background:var(--accent);border:none;padding:0 22px;border-radius:14px;font-weight:bold;color:#000;">📨</button>
+        </div>
+      </div>
     </div>
   </div>
 
@@ -265,7 +282,7 @@
     </div>
   </div>
 
-  <!-- ADMIN SCREEN (расширенный) -->
+  <!-- ADMIN SCREEN -->
   <div id="scr-admin" class="screen">
     <div class="content" style="padding:20px;overflow-y:auto;">
       <h2 style="color:var(--danger);font-family:'Orbitron';">🛡️ COMMAND CENTER</h2>
@@ -290,17 +307,8 @@
       </div>
 
       <div class="admin-panel" style="border-color:#fbbf24;">
-        <h3>📋 Логи пополнений (последние 10)</h3>
+        <h3>📋 Логи пополнений</h3>
         <div id="log-container" style="max-height:140px;overflow-y:auto;font-size:13px;background:#000;padding:10px;border-radius:12px;"></div>
-      </div>
-
-      <div class="admin-panel">
-        <h3>💬 Общий чат (маты фильтруются)</h3>
-        <div id="chat-messages" class="chat-box"></div>
-        <div style="display:flex;gap:8px;margin-top:10px;">
-          <input type="text" id="chat-input" placeholder="Сообщение..." style="flex:1;padding:12px;background:#000;border:1px solid #444;color:#fff;border-radius:14px;">
-          <button onclick="Admin.sendChat()" style="background:var(--accent);border:none;padding:0 22px;border-radius:14px;font-weight:bold;">📨</button>
-        </div>
       </div>
     </div>
   </div>
@@ -357,7 +365,45 @@
       buttonRootId: 'ton-connect-btn'
     });
 
-    // ---------- ГЛОБАЛЬНОЕ СОСТОЯНИЕ ----------
+    // ---------- ЦЕНЗУРА ----------
+    function censorText(text) {
+      const bad = ['бля','сука','хуй','пизд','ебат','нах','жоп','долб','гандон','мудак'];
+      let res = text;
+      bad.forEach(w => {
+        const regex = new RegExp(w, 'gi');
+        res = res.replace(regex, match => '*'.repeat(match.length));
+      });
+      return res;
+    }
+
+    // ---------- ОБЩИЙ ЧАТ (для всех) ----------
+    const Chat = {
+      sendPublic() {
+        const input = document.getElementById('public-chat-input');
+        const msg = input.value.trim();
+        if (!msg) return;
+        const clean = censorText(msg);
+        db.ref('public_chat/messages').push({
+          user: App.user?.name || rawUser.first_name,
+          text: clean,
+          time: Date.now()
+        });
+        input.value = '';
+      },
+      listen() {
+        db.ref('public_chat/messages').limitToLast(40).on('value', snap => {
+          const data = snap.val();
+          const box = document.getElementById('public-chat-messages');
+          if (!data) { box.innerHTML = '<div style="color:gray;">Пока тихо...</div>'; return; }
+          box.innerHTML = Object.values(data).map(m => 
+            `<div class="chat-msg"><strong>${m.user}:</strong> ${m.text}</div>`
+          ).join('');
+          box.scrollTop = box.scrollHeight;
+        });
+      }
+    };
+
+    // ---------- APP ----------
     const App = {
       user: null,
       init() {
@@ -365,8 +411,8 @@
         this.syncUser();
         this.listenGameState();
         this.listenLobby();
+        Chat.listen();
         Admin.listenLogs();
-        Admin.listenChat();
       },
       syncUser() {
         db.ref(`users/${userId}`).on('value', snap => {
@@ -390,12 +436,14 @@
             statusEl.innerText = 'ОЖИДАНИЕ ИГРОКОВ';
             subjectEl.innerText = state.subject || 'Тема не назначена';
             UI.closeDrawOverlay();
+            document.getElementById('active-drawing-notice').style.display = 'none';
           } else if (state.status === 'drawing') {
             statusEl.innerText = '🎨 ИДЁТ БИТВА!';
             subjectEl.innerText = state.subject;
-            const myParticipation = state.players && state.players[userId];
-            if (myParticipation) {
+            const players = state.players || {};
+            if (players[userId]) {
               UI.openDrawOverlay(state.subject, state.endTime);
+              document.getElementById('active-drawing-notice').style.display = 'none';
             } else {
               document.getElementById('active-drawing-notice').style.display = 'block';
             }
@@ -413,17 +461,16 @@
       },
       async joinBattle() {
         if (!this.user || this.user.balance < 0.1) return alert('Недостаточно TON');
-        const gameSnap = await db.ref('game_state').once('value');
-        const game = gameSnap.val() || {};
+        const snap = await db.ref('game_state').once('value');
+        const game = snap.val() || {};
         if (game.status !== 'lobby') return alert('Раунд уже идёт!');
-        // Имитация списания
-        await db.ref(`users/${userId}/balance`).transaction(b => (b || 0) - 0.1);
+        await db.ref(`users/${userId}/balance`).transaction(b => (b||0) - 0.1);
         await db.ref(`lobby_players/${userId}`).set({ name: this.user.name, avatar: this.user.avatar });
         tg.HapticFeedback.notificationOccurred('success');
       }
     };
 
-    // ---------- UI MANAGER ----------
+    // ---------- UI ----------
     const UI = {
       switchTab(tab, btn) {
         document.querySelectorAll('.screen').forEach(s => s.classList.remove('active'));
@@ -432,10 +479,10 @@
         if(btn) btn.classList.add('active');
       },
       openDrawOverlay(subject, endTime) {
-        const overlay = document.getElementById('draw-overlay');
-        overlay.style.display = 'flex';
+        document.getElementById('draw-overlay').style.display = 'flex';
         document.getElementById('draw-task').innerText = subject;
         Engine.initCanvas();
+        if (this.timerInterval) clearInterval(this.timerInterval);
         this.timerInterval = setInterval(() => {
           const diff = endTime - Date.now();
           const el = document.getElementById('draw-timer');
@@ -455,7 +502,7 @@
       }
     };
 
-    // ---------- DRAWING ENGINE (исправлено касание) ----------
+    // ---------- ИСПРАВЛЕННЫЙ ДВИЖОК РИСОВАНИЯ ----------
     const Engine = {
       canvas: null, ctx: null,
       drawing: false,
@@ -465,8 +512,9 @@
       initCanvas() {
         this.canvas = document.getElementById('main-canvas');
         this.ctx = this.canvas.getContext('2d');
-        this.canvas.width = window.innerWidth;
-        this.canvas.height = window.innerHeight - 180;
+        // Устанавливаем размеры строго по клиентским размерам
+        this.canvas.width = this.canvas.clientWidth;
+        this.canvas.height = this.canvas.clientHeight;
         this.ctx.fillStyle = '#ffffff';
         this.ctx.fillRect(0, 0, this.canvas.width, this.canvas.height);
         this.ctx.lineCap = 'round';
@@ -493,38 +541,60 @@
         });
       },
       bindEvents() {
-        this.canvas.addEventListener('touchstart', (e) => {
-          e.preventDefault();
+        // Убираем старые обработчики
+        this.canvas.replaceWith(this.canvas.cloneNode(true));
+        this.canvas = document.getElementById('main-canvas');
+        this.ctx = this.canvas.getContext('2d');
+        
+        const getCanvasCoords = (e) => {
           const rect = this.canvas.getBoundingClientRect();
-          const touch = e.touches[0];
-          this.lastX = touch.clientX - rect.left;
-          this.lastY = touch.clientY - rect.top;
-          this.drawing = true;
+          // Координаты внутри canvas с учётом масштаба
+          const scaleX = this.canvas.width / rect.width;   // соотношение реального размера к CSS
+          const scaleY = this.canvas.height / rect.height;
+          const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+          const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+          return {
+            x: (clientX - rect.left) * scaleX,
+            y: (clientY - rect.top) * scaleY
+          };
+        };
+
+        const startDraw = (e) => {
+          e.preventDefault();
+          const { x, y } = getCanvasCoords(e);
+          this.lastX = x;
+          this.lastY = y;
           if (this.tool === 'fill') {
-            this.floodFill(Math.floor(this.lastX), Math.floor(this.lastY));
+            this.floodFill(Math.floor(x), Math.floor(y));
             this.drawing = false;
           } else {
+            this.drawing = true;
             this.saveState();
             this.ctx.beginPath();
-            this.ctx.moveTo(this.lastX, this.lastY);
+            this.ctx.moveTo(x, y);
           }
-        });
-        this.canvas.addEventListener('touchmove', (e) => {
+        };
+
+        const moveDraw = (e) => {
           e.preventDefault();
           if (!this.drawing || this.tool === 'fill') return;
-          const rect = this.canvas.getBoundingClientRect();
-          const touch = e.touches[0];
-          const x = touch.clientX - rect.left;
-          const y = touch.clientY - rect.top;
+          const { x, y } = getCanvasCoords(e);
           this.ctx.lineTo(x, y);
           this.ctx.strokeStyle = this.color;
           this.ctx.lineWidth = this.size;
           this.ctx.stroke();
           this.ctx.beginPath();
           this.ctx.moveTo(x, y);
-          this.lastX = x; this.lastY = y;
-        });
-        window.addEventListener('touchend', () => { this.drawing = false; });
+        };
+
+        const endDraw = () => {
+          this.drawing = false;
+        };
+
+        this.canvas.addEventListener('touchstart', startDraw, { passive: false });
+        this.canvas.addEventListener('touchmove', moveDraw, { passive: false });
+        this.canvas.addEventListener('touchend', endDraw);
+        this.canvas.addEventListener('touchcancel', endDraw);
       },
       setTool(t) {
         this.tool = t;
@@ -554,6 +624,7 @@
         const stack = [[x,y]];
         while(stack.length) {
           const [cx,cy] = stack.pop();
+          if(cx<0||cy<0||cx>=this.canvas.width||cy>=this.canvas.height) continue;
           const current = this.getPixel(imageData,cx,cy);
           if(this.colorsMatch(current,target)) {
             this.setPixel(imageData,cx,cy,fill);
@@ -577,7 +648,7 @@
       }
     };
 
-    // ---------- ADMIN MODULE (расширен) ----------
+    // ---------- ADMIN ----------
     const Admin = {
       forceStartRound() {
         const subject = document.getElementById('adm-subject').value || 'КОСМОС';
@@ -603,7 +674,7 @@
         const delta = action === 'add' ? amt : -amt;
         db.ref(`users/${uid}/balance`).transaction(b => (b||0) + delta);
         db.ref(`logs/transactions`).push({
-          user: uid, amount: delta, type: action, timestamp: Date.now(), admin: userId
+          user: uid, amount: delta, type: action, timestamp: Date.now()
         });
       },
       listenLogs() {
@@ -615,42 +686,9 @@
             `<div style="margin:4px 0;">${v.type==='add'?'➕':'➖'} ${v.user}: ${v.amount} TON</div>`
           ).join('');
         });
-      },
-      sendChat() {
-        const input = document.getElementById('chat-input');
-        let msg = input.value.trim();
-        if (!msg) return;
-        msg = this.censor(msg);
-        db.ref('chat/messages').push({
-          user: App.user?.name || 'Admin',
-          text: msg,
-          time: Date.now()
-        });
-        input.value = '';
-      },
-      listenChat() {
-        db.ref('chat/messages').limitToLast(40).on('value', snap => {
-          const msgs = snap.val();
-          const box = document.getElementById('chat-messages');
-          if (!msgs) { box.innerHTML = '<div style="color:gray;">Чат пуст</div>'; return; }
-          box.innerHTML = Object.values(msgs).map(m => 
-            `<div class="msg"><strong>${m.user}:</strong> ${m.text}</div>`
-          ).join('');
-          box.scrollTop = box.scrollHeight;
-        });
-      },
-      censor(text) {
-        const bad = ['бля','сука','хуй','пизд','ебат','нах','жоп'];
-        let res = text;
-        bad.forEach(w => {
-          const regex = new RegExp(w, 'gi');
-          res = res.replace(regex, match => '*'.repeat(match.length));
-        });
-        return res;
       }
     };
 
-    // Запуск
     App.init();
   </script>
 </body>
